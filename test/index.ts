@@ -4,7 +4,7 @@
  */
 
 import assert from 'assert';
-import log, { create, Logger, LogLevel } from '../src/index';
+import log, { create, LogLevel } from '../src/index';
 
 // Test counters
 let passed = 0;
@@ -196,6 +196,166 @@ test('Logger instance create method works', () => {
 
   assert.strictEqual(typeof logger2.info, 'function');
   assert.notStrictEqual(logger1, logger2);
+});
+
+// ============================================================
+// REGRESSION TESTS FOR BUG FIXES
+// ============================================================
+
+// Test 11: BUG-002 - setLevel throws on invalid level
+test('BUG-002: setLevel throws TypeError on invalid level', () => {
+  const testLog = create({ level: 'debug' });
+  let threw = false;
+  try {
+    testLog.setLevel('invalid' as LogLevel);
+  } catch (e) {
+    threw = true;
+    assert.ok(e instanceof TypeError);
+    assert.ok((e as Error).message.includes('Invalid log level'));
+  }
+  assert.strictEqual(threw, true, 'Should have thrown TypeError');
+});
+
+// Test 12: BUG-003 - Child logger inherits parent options
+test('BUG-003: Child logger inherits parent level', () => {
+  const parent = create({ level: 'warn' });
+  const child = parent.create();
+  assert.strictEqual(child.getLevel(), 'warn');
+});
+
+// Test 13: BUG-003 - Child logger can override parent options
+test('BUG-003: Child logger can override parent options', () => {
+  const parent = create({ level: 'warn' });
+  const child = parent.create({ level: 'debug' });
+  assert.strictEqual(parent.getLevel(), 'warn');
+  assert.strictEqual(child.getLevel(), 'debug');
+});
+
+// Test 14: BUG-004 - Error objects show message and name
+test('BUG-004: Error objects are properly serialized', () => {
+  const outputs: string[] = [];
+  const originalError = console.error;
+  console.error = (...args: unknown[]) => {
+    outputs.push(args.join(' '));
+  };
+
+  const testLog = create({ icons: false });
+  const err = new Error('Test error message');
+  testLog.error(err);
+
+  console.error = originalError;
+
+  assert.strictEqual(outputs.length, 1);
+  assert.ok(outputs[0].includes('Test error message'), 'Should include error message');
+  assert.ok(outputs[0].includes('"name"'), 'Should include error name');
+});
+
+// Test 15: BUG-004 - Error custom properties are included
+test('BUG-004: Error custom properties are included', () => {
+  const outputs: string[] = [];
+  const originalError = console.error;
+  console.error = (...args: unknown[]) => {
+    outputs.push(args.join(' '));
+  };
+
+  const testLog = create({ icons: false });
+  const err = new Error('Test') as Error & { code: string };
+  err.code = 'ERR_CUSTOM';
+  testLog.error(err);
+
+  console.error = originalError;
+
+  assert.strictEqual(outputs.length, 1);
+  assert.ok(outputs[0].includes('ERR_CUSTOM'), 'Should include custom error property');
+});
+
+// Test 16: BUG-005 - Map is properly serialized
+test('BUG-005: Map objects are properly serialized', () => {
+  const outputs: string[] = [];
+  const originalLog = console.log;
+  console.log = (...args: unknown[]) => {
+    outputs.push(args.join(' '));
+  };
+
+  const testLog = create({ icons: false });
+  testLog.info(new Map([['key', 'value']]));
+
+  console.log = originalLog;
+
+  assert.strictEqual(outputs.length, 1);
+  assert.ok(outputs[0].includes('Map(1)'), 'Should show Map with size');
+  assert.ok(outputs[0].includes('key'), 'Should include map key');
+  assert.ok(outputs[0].includes('value'), 'Should include map value');
+});
+
+// Test 17: BUG-005 - Set is properly serialized
+test('BUG-005: Set objects are properly serialized', () => {
+  const outputs: string[] = [];
+  const originalLog = console.log;
+  console.log = (...args: unknown[]) => {
+    outputs.push(args.join(' '));
+  };
+
+  const testLog = create({ icons: false });
+  testLog.info(new Set([1, 2, 3]));
+
+  console.log = originalLog;
+
+  assert.strictEqual(outputs.length, 1);
+  assert.ok(outputs[0].includes('Set(3)'), 'Should show Set with size');
+  assert.ok(outputs[0].includes('1'), 'Should include set value');
+});
+
+// Test 18: BUG-005 - RegExp is properly serialized
+test('BUG-005: RegExp objects are properly serialized', () => {
+  const outputs: string[] = [];
+  const originalLog = console.log;
+  console.log = (...args: unknown[]) => {
+    outputs.push(args.join(' '));
+  };
+
+  const testLog = create({ icons: false });
+  testLog.info(/test[a-z]+/gi);
+
+  console.log = originalLog;
+
+  assert.strictEqual(outputs.length, 1);
+  assert.ok(outputs[0].includes('/test[a-z]+/gi'), 'Should show RegExp as string');
+});
+
+// Test 19: Date objects are properly serialized
+test('Date objects are properly serialized', () => {
+  const outputs: string[] = [];
+  const originalLog = console.log;
+  console.log = (...args: unknown[]) => {
+    outputs.push(args.join(' '));
+  };
+
+  const testLog = create({ icons: false });
+  const date = new Date('2024-01-15T10:30:00.000Z');
+  testLog.info(date);
+
+  console.log = originalLog;
+
+  assert.strictEqual(outputs.length, 1);
+  assert.ok(outputs[0].includes('2024-01-15'), 'Should include date in ISO format');
+});
+
+// Test 20: BigInt values are handled
+test('BigInt values are properly serialized', () => {
+  const outputs: string[] = [];
+  const originalLog = console.log;
+  console.log = (...args: unknown[]) => {
+    outputs.push(args.join(' '));
+  };
+
+  const testLog = create({ icons: false });
+  testLog.info(123n);
+
+  console.log = originalLog;
+
+  assert.strictEqual(outputs.length, 1);
+  assert.ok(outputs[0].includes('123n'), 'Should show BigInt with n suffix');
 });
 
 // Summary

@@ -73,16 +73,57 @@ export interface Logger {
 }
 
 /**
- * Safely stringify a value, handling circular references
+ * Safely stringify a value, handling circular references and special types
+ * BUG-004 fix: Handle Error objects properly
+ * BUG-005 fix: Handle Map, Set, RegExp and other built-in types
  */
 function safeStringify(value: unknown): string {
   if (value === null) return 'null';
   if (value === undefined) return 'undefined';
 
   if (typeof value === 'object') {
+    // Handle Error objects specially - they don't stringify well
+    if (value instanceof Error) {
+      const errorObj: Record<string, unknown> = {
+        name: value.name,
+        message: value.message,
+      };
+      if (value.stack) {
+        errorObj.stack = value.stack;
+      }
+      // Include any custom properties on the error
+      for (const key of Object.keys(value)) {
+        errorObj[key] = (value as unknown as Record<string, unknown>)[key];
+      }
+      return JSON.stringify(errorObj, null, 2);
+    }
+
+    // Handle Map
+    if (value instanceof Map) {
+      return `Map(${value.size}) ${JSON.stringify(Object.fromEntries(value), null, 2)}`;
+    }
+
+    // Handle Set
+    if (value instanceof Set) {
+      return `Set(${value.size}) ${JSON.stringify([...value], null, 2)}`;
+    }
+
+    // Handle RegExp
+    if (value instanceof RegExp) {
+      return value.toString();
+    }
+
+    // Handle Date (already works but be explicit)
+    if (value instanceof Date) {
+      return value.toISOString();
+    }
+
     try {
       const seen = new WeakSet();
       return JSON.stringify(value, (_key, val) => {
+        if (typeof val === 'bigint') {
+          return val.toString() + 'n';
+        }
         if (typeof val === 'object' && val !== null) {
           if (seen.has(val)) {
             return '[Circular]';
@@ -94,6 +135,11 @@ function safeStringify(value: unknown): string {
     } catch {
       return String(value);
     }
+  }
+
+  // Handle BigInt
+  if (typeof value === 'bigint') {
+    return value.toString() + 'n';
   }
 
   return String(value);
@@ -176,12 +222,21 @@ function createLogger(options: LoggerOptions = {}): Logger {
     error: (...args: unknown[]) => log('error', args),
     success: (...args: unknown[]) => log('success', args),
 
-    create: (newOptions?: LoggerOptions) => createLogger(newOptions),
+    // BUG-003 fix: Child logger inherits parent options, can override
+    create: (newOptions?: LoggerOptions) => createLogger({
+      prefix,
+      timestamp: showTimestamp,
+      level: currentLevel,
+      icons: showIcons,
+      ...newOptions,
+    }),
 
     setLevel: (level: LogLevel) => {
-      if (level in LEVELS) {
-        currentLevel = level;
+      // BUG-002 fix: Throw error for invalid levels instead of silent failure
+      if (!(level in LEVELS)) {
+        throw new TypeError(`Invalid log level: "${level}". Valid levels: ${Object.keys(LEVELS).join(', ')}`);
       }
+      currentLevel = level;
     },
 
     getLevel: () => currentLevel,

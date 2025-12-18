@@ -2,8 +2,8 @@
   "name": "minilog-zero",
   "version": "1.0.0",
   "description": "Zero-dependency colorful console logger with levels, timestamps and prefixes",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
   "files": [
     "dist"
   ],
