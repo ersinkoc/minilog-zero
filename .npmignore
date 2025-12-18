@@ -1,0 +1,21 @@
+# Source files (dist is published instead)
+src/
+test/
+
+# Config files
+tsconfig.json
+.gitignore
+.github/
+
+# Package files
+*.tgz
+
+# Coverage
+coverage/
+
+# IDE
+.idea/
+.vscode/
+
+# Documentation source
+x/
